@@ -1,0 +1,4 @@
+1.使用反射和注解实现了 像spring mvc 那样处理业务 业务在moules
+2.使用redis数据保存 ,实现了一些乐观锁
+3.使用消息队列disruptor 分发到对应的业务处理
+4.com.test.socket.SessionClient 测试

@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:tx="http://www.springframework.org/schema/tx" xmlns:jdbc="http://www.springframework.org/schema/jdbc"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:mongo="http://www.springframework.org/schema/data/mongo"
+	xsi:schemaLocation="
+     http://www.springframework.org/schema/context
+     http://www.springframework.org/schema/context/spring-context-3.0.xsd
+     http://www.springframework.org/schema/beans
+     http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+     http://www.springframework.org/schema/jdbc
+     http://www.springframework.org/schema/jdbc/spring-jdbc-3.0.xsd
+     http://www.springframework.org/schema/tx
+     http://www.springframework.org/schema/tx/spring-tx-3.0.xsd
+     http://www.springframework.org/schema/aop
+     http://www.springframework.org/schema/aop/spring-aop-3.0.xsd
+     
+      http://www.springframework.org/schema/data/mongo  
+        http://www.springframework.org/schema/data/mongo/spring-mongo-1.0.xsd
+     ">
+
+
+
+	<!-- SessionFactory, DataSource, etc. omitted -->
+	<!-- <bean id="transactionManager" class="org.springframework.orm.hibernate3.HibernateTransactionManager"> 
+		<property name="sessionFactory" ref="sessionFactory"/> </bean> <aop:config> 
+		<aop:pointcut id="productServiceMethods" expression="execution(* product.ProductService.(..))"/> 
+		<aop:advisor advice-ref="txAdvice" pointcut-ref="productServiceMethods"/> 
+		</aop:config> <tx:advice id="txAdvice" transaction-manager="myTxManager"> 
+		<tx:attributes> <tx:method name="increasePrice" propagation="REQUIRED"/> 
+		<tx:method name="someOtherBusinessMethod" propagation="REQUIRES_NEW"/> <tx:method 
+		name="*" propagation="SUPPORTS" read-only="true"/> </tx:attributes> </tx:advice> 
+		<bean id="myProductService" class="product.SimpleProductService"> <property 
+		name="productDao" ref="myProductDao"/> </bean> -->
+
+
+	<!-- log4j start -->
+	<bean
+		class="org.springframework.beans.factory.config.MethodInvokingFactoryBean">
+		<property name="targetClass" value="org.springframework.util.Log4jConfigurer" />
+		<property name="targetMethod" value="initLogging" />
+		<property name="arguments">
+			<list>
+				<value>classpath:log4j.properties</value>
+			</list>
+		</property>
+	</bean>
+
+	<!-- log4j end -->
+
+	<!-- redis start  
+	<context:property-placeholder location="file:redis.properties" />
+	-->
+	
+	<context:property-placeholder location="classpath:redis.properties" />
+	<context:property-placeholder location="classpath:system.properties" />
+	
+	<bean id="poolConfig" class="redis.clients.jedis.JedisPoolConfig">
+		<property name="maxIdle" value="${redis.maxIdle}" />
+		<property name="maxTotal" value="${redis.maxTotal}" />
+		<property name="minEvictableIdleTimeMillis" value="${redis.minEvictableIdleTimeMillis}" />
+		<property name="timeBetweenEvictionRunsMillis" value="${redis.timeBetweenEvictionRunsMillis}" />
+		<property name="testOnBorrow" value="${redis.testOnBorrow}" />
+	</bean>
+
+	<bean id="redisTemplate" class="com.simian.game.comm.RedisTemplate"
+		init-method="initPool">
+		<property name="host" value="${redis.host}" />
+		<property name="port" value="${redis.port}" />
+		<property name="poolConfig" ref="poolConfig" />
+	</bean>
+
+	<!-- redis end -->
+
+	<!-- mongdb start -->
+	<mongo:mongo host="localhost" port="27017">
+		<mongo:options connections-per-host="200"
+			threads-allowed-to-block-for-connection-multiplier="100"
+			connect-timeout="1000" max-wait-time="1500" auto-connect-retry="true"
+			socket-keep-alive="true" socket-timeout="1500" slave-ok="true"
+			write-number="1" write-timeout="0" write-fsync="false" />
+	</mongo:mongo>
+
+	<mongo:db-factory dbname="test" username="root"
+		password="root" mongo-ref="mongo" />
+
+	<bean id="mongoTemplate" class="org.springframework.data.mongodb.core.MongoTemplate">
+		<constructor-arg name="mongoDbFactory" ref="mongoDbFactory" />
+	</bean>
+
+	<bean id="abstractMongoDB" class="com.simian.game.comm.AbstractMongoDB">
+		<property name="mongoTemplate">
+			<ref bean="mongoTemplate" />
+		</property>
+	</bean>
+
+	<!-- mongdb end -->
+	<!-- Spring 的组件自动描的包的目录 -->
+	<context:annotation-config />
+	<context:component-scan base-package="com.simian.game.modules" />
+	<context:component-scan base-package="com.simian.game.server" />
+	<context:component-scan base-package="com.simian.game"  />
+	<aop:aspectj-autoproxy />
+
+
+	<bean class="com.simian.game.server.transaction.AopTransaction"
+		id="aopTrances">
+		<property name="redisTemplate">
+			<ref bean="redisTemplate" />
+		</property>
+	</bean>
+
+	<aop:config>
+		<aop:aspect ref="aopTrances">
+			<!-- <aop:before method="beforeSleep" pointcut="execution(* *.sleep(..))"/> 
+				<aop:after method="afterSleep" pointcut="execution(* *.sleep(..))"/>execution(* com.simian.game.modules..*.*(..)) 
+				execution（* com.xyz.service..*.*（..）） 扫描dao下面的包 -->
+
+			<aop:around method="doBasicProfiling"
+				pointcut="execution(* com.simian.game.modules..service..*.*(..))" />
+
+		</aop:aspect>
+	</aop:config>
+	
+	<!-- 打开aop 注解 暂时没用 -->
+	<context:component-scan base-package="aop.annotation" />
+	<aop:aspectj-autoproxy proxy-target-class="true" />
+	<aop:aspectj-autoproxy />
+</beans>  
